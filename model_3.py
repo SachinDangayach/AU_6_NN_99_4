@@ -148,26 +148,26 @@ class Net(nn.Module):
             nn.Dropout(dropout_value)
         )  # 11x11x16 → 9x9x16, RF=16
         self.convblock6 = nn.Sequential(
-            nn.Conv2d(in_channels=16, out_channels=32, kernel_size=(3, 3), padding=0, bias=False),
+            nn.Conv2d(in_channels=16, out_channels=24, kernel_size=(3, 3), padding=0, bias=False),
             nn.ReLU(),            
-            nn.BatchNorm2d(32),
+            nn.BatchNorm2d(24),
             nn.Dropout(dropout_value)
-        )  # 9x9x16 → 7x7x32, RF=20
+        )  # 9x9x16 → 7x7x24, RF=20
 
         # Output Block: Global Average Pooling + classification
         # GAP reduces 7x7x32 to 1x1x32, eliminating need for FC layers
         self.gap = nn.Sequential(
             nn.AvgPool2d(kernel_size=7)
-        )  # 7x7x32 → 1x1x32, RF=28
+        )  # 7x7x24 → 1x1x24, RF=28
         
         # Final 1x1 convolution maps 32 features to 10 classes
         # No BatchNorm/ReLU/Dropout before final classification layer
         self.convblock7 = nn.Sequential(
-            nn.Conv2d(in_channels=32, out_channels=10, kernel_size=(1, 1), padding=0, bias=False),
+            nn.Conv2d(in_channels=24, out_channels=10, kernel_size=(1, 1), padding=0, bias=False),
             # nn.BatchNorm2d(10),  # Commented out for final layer
             # nn.ReLU(),           # Commented out for final layer
             # nn.Dropout(dropout_value)  # Commented out for final layer
-        )  # 1x1x32 → 1x1x10, RF=28
+        )  # 1x1x24 → 1x1x10, RF=28
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
