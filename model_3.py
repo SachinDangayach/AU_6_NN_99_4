@@ -151,9 +151,9 @@ class Net(nn.Module):
             nn.Dropout(dropout_value)
         )  # 11x11x8 → 9x9x16, RF=16
         self.convblock6 = nn.Sequential(
-            nn.Conv2d(in_channels=16, out_channels=32, kernel_size=(3, 3), padding=0, bias=False),
+            nn.Conv2d(in_channels=16, out_channels=30, kernel_size=(3, 3), padding=0, bias=False),
             nn.ReLU(),            
-            nn.BatchNorm2d(32),
+            nn.BatchNorm2d(30),
             nn.Dropout(dropout_value)
         )  # 9x9x16 → 7x7x32, RF=20
 
@@ -166,7 +166,7 @@ class Net(nn.Module):
         # Final 1x1 convolution maps 32 features to 10 classes
         # No BatchNorm/ReLU/Dropout before final classification layer
         self.convblock7 = nn.Sequential(
-            nn.Conv2d(in_channels=32, out_channels=10, kernel_size=(1, 1), padding=0, bias=False),
+            nn.Conv2d(in_channels=30, out_channels=10, kernel_size=(1, 1), padding=0, bias=False),
             # nn.BatchNorm2d(10),  # Commented out for final layer
             # nn.ReLU(),           # Commented out for final layer
             # nn.Dropout(dropout_value)  # Commented out for final layer
