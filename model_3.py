@@ -67,7 +67,7 @@ class Net(nn.Module):
         → 9x9x16 → 7x7x32 → 1x1x32 → 1x1x10
     
     Receptive Field Progression:
-        RF: 3 → 5 → 5 → 6 → 12 → 16 → 20 → 24 → 28
+        RF: 3 → 5 → 6 → 6 → 12 → 16 → 20 → 28 → 28
     
     Key Components:
         - Input Block: Initial feature extraction (1→8 channels) + BatchNorm + Dropout
@@ -131,6 +131,9 @@ class Net(nn.Module):
         # 1x1 convolution reduces channels without spatial information loss
         self.convblock3 = nn.Sequential(
             nn.Conv2d(in_channels=16, out_channels=8, kernel_size=(1, 1), padding=0, bias=False),
+            nn.ReLU(),
+            nn.BatchNorm2d(8),
+            nn.Dropout(dropout_value)
         )  # 13x13x16 → 13x13x8, RF=6
 
         # Conv Block 2: Deep feature extraction with regularization
