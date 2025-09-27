@@ -31,7 +31,7 @@ Key Design Features:
     - Channel reduction with 1x1 convolutions
 
 Architecture Flow:
-    28x28x1 → 26x26x8 → 26x26x16 → 26x26x8 → 13x13x8 → 11x11x16 
+    28x28x1 → 26x26x8 → 26x26x16 → 13x13x16 → 13x13x8 → 11x11x8 
     → 9x9x16 → 7x7x32 → 1x1x32 → 1x1x10
 
 Usage:
@@ -63,7 +63,7 @@ class Net(nn.Module):
     generalization and parameter efficiency.
     
     Architecture Flow:
-        28x28x1 → 26x26x8 → 26x26x16 → 26x26x8 → 13x13x8 → 11x11x16 
+        28x28x1 → 26x26x8 → 26x26x16 → 13x13x16 → 13x13x8 → 11x11x8 
         → 9x9x16 → 7x7x32 → 1x1x32 → 1x1x10
     
     Receptive Field Progression:
@@ -127,18 +127,18 @@ class Net(nn.Module):
 
         # Transition Block: Channel reduction + spatial downsampling
         # Max pooling reduces spatial dimensions by half
-        self.pool1 = nn.MaxPool2d(2, 2)  # 26x26x8 → 26x26x8, RF=6
+        self.pool1 = nn.MaxPool2d(2, 2)  # 26x26x16 → 13x13x16, RF=6
         # 1x1 convolution reduces channels without spatial information loss
         self.convblock3 = nn.Sequential(
             nn.Conv2d(in_channels=16, out_channels=8, kernel_size=(1, 1), padding=0, bias=False),
-        )  # 26x26x16 → 26x26x8, RF=6
+        )  # 13x13x16 → 13x13x8, RF=6
 
         # Conv Block 2: Deep feature extraction with regularization
         # Pattern: Rebuild channel depth for richer feature representation
         self.convblock4 = nn.Sequential(
             nn.Conv2d(in_channels=8, out_channels=8, kernel_size=(3, 3), padding=0, bias=False),
             nn.ReLU(),            
-            nn.BatchNorm2d(16),
+            nn.BatchNorm2d(8),
             nn.Dropout(dropout_value)
         )  # 13x13x8 → 11x11x8, RF=12
         self.convblock5 = nn.Sequential(
@@ -221,7 +221,7 @@ class Net(nn.Module):
         
         # Stage 2: Channel reduction and spatial downsampling
         x = self.pool1(x)       # 26x26x16 → 13x13x16, RF=6 (max pooling)
-        x = self.convblock3(x)  # 26x26x16 → 26x26x8, RF=6 (channel reduction)
+        x = self.convblock3(x)  # 13x13x16 → 13x13x8, RF=6 (channel reduction)
         
         # Stage 3: Deep feature learning with regularization (high-level patterns)
         x = self.convblock4(x)  # 13x13x8 → 11x11x8, RF=12
