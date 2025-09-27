@@ -1,11 +1,15 @@
 """
-MNIST Digit Classification CNN
+MNIST Digit Classification CNN with Dropout and Global Average Pooling
 
 This module implements a compact Convolutional Neural Network (CNN) for MNIST digit 
-classification. The architecture is designed to achieve high accuracy while maintaining 
-computational efficiency through strategic use of:
+classification with Dropout regularization and Global Average Pooling (GAP). The 
+architecture is designed to achieve high accuracy while maintaining computational 
+efficiency through strategic use of:
 
 - Convolutional layers for feature extraction
+- Batch Normalization for training stability and faster convergence
+- Dropout layers for regularization and preventing overfitting
+- Global Average Pooling for parameter reduction and better generalization
 - Max pooling for spatial dimension reduction
 - 1x1 convolutions for channel reduction and computational efficiency
 - ReLU activations for non-linearity
@@ -14,15 +18,21 @@ computational efficiency through strategic use of:
 Architecture Overview:
     Input: 28x28x1 grayscale images
     Output: 10 classes (digits 0-9)
-    Total Parameters: ~10K (varies based on implementation)
+    Total Parameters: ~8K (efficient design with GAP)
     Final Receptive Field: 28x28 (covers entire input)
 
 Key Design Features:
+    - Dropout regularization: Prevents overfitting with 0.1 dropout rate
+    - Batch Normalization: Improves training stability and convergence speed
+    - Global Average Pooling: Reduces parameters and improves generalization
     - No bias terms in convolutions (bias=False) for cleaner gradients
-    - Progressive channel increase: 1→32→64→128
+    - Progressive channel increase: 1→8→16→32 channels
     - Strategic downsampling with max pooling
     - Channel reduction with 1x1 convolutions
-    - Global average pooling equivalent with 7x7 convolution
+
+Architecture Flow:
+    28x28x1 → 26x26x8 → 26x26x16 → 26x26x8 → 13x13x8 → 11x11x16 
+    → 9x9x16 → 7x7x32 → 1x1x32 → 1x1x10
 
 Usage:
     model = Net()
@@ -39,39 +49,47 @@ import torch.nn as nn
 import torch.nn.functional as F
 from typing import Tuple
 
+# Dropout rate for regularization
+dropout_value = 0.1
+
 
 class Net(nn.Module):
     """
-    MNIST Digit Classification CNN
+    MNIST Digit Classification CNN with Dropout and Global Average Pooling
     
-    A compact convolutional neural network designed for MNIST digit classification.
-    The architecture follows a progressive feature extraction approach with strategic
-    downsampling and channel management.
+    A compact convolutional neural network designed for MNIST digit classification
+    with Dropout regularization and Global Average Pooling (GAP). This architecture
+    combines the benefits of Batch Normalization, Dropout, and GAP for improved
+    generalization and parameter efficiency.
     
     Architecture Flow:
-        28x28x1 → 26x26x32 → 24x24x64 → 22x22x128 → 11x11x128 → 11x11x32 
-        → 9x9x64 → 7x7x128 → 7x7x10 → 1x1x10
+        28x28x1 → 26x26x8 → 26x26x16 → 26x26x8 → 13x13x8 → 11x11x16 
+        → 9x9x16 → 7x7x32 → 1x1x32 → 1x1x10
     
     Receptive Field Progression:
-        RF: 3 → 5 → 7 → 8 → 8 → 12 → 16 → 16 → 28
+        RF: 3 → 5 → 5 → 6 → 12 → 16 → 20 → 24 → 28
     
     Key Components:
-        - Input Block: Initial feature extraction (1→32 channels)
-        - Conv Block 1: Progressive feature learning (32→64→128 channels)
-        - Transition Block: Spatial downsampling + channel reduction
-        - Conv Block 2: Deep feature extraction (32→64→128 channels)
-        - Output Block: Classification preparation (128→10 channels)
+        - Input Block: Initial feature extraction (1→8 channels) + BatchNorm + Dropout
+        - Conv Block 1: Progressive feature learning (8→16 channels) + BatchNorm + Dropout
+        - Transition Block: Channel reduction (16→8) + spatial downsampling
+        - Conv Block 2: Deep feature extraction (8→16→32 channels) + BatchNorm + Dropout
+        - Output Block: Global Average Pooling + classification (32→10 channels)
     
     Design Rationale:
-        - No bias terms: Reduces parameters and improves gradient flow
+        - Dropout (0.1): Prevents overfitting by randomly zeroing 10% of activations
+        - Batch Normalization: Normalizes inputs to each layer, improving training stability
+        - Global Average Pooling: Reduces parameters by replacing FC layers with spatial averaging
+        - No bias terms: BatchNorm includes learnable bias, making conv bias redundant
         - ReLU activations: Provides non-linearity and gradient stability
         - Max pooling: Reduces spatial dimensions while preserving important features
         - 1x1 convolutions: Efficient channel reduction without spatial information loss
-        - 7x7 final convolution: Acts as global average pooling for classification
+        - Progressive channels: 1→8→16→32 for balanced complexity and efficiency
     
     Attributes:
-        convblock1-8 (nn.Sequential): Convolutional blocks with ReLU activations
+        convblock1-7 (nn.Sequential): Convolutional blocks with BatchNorm + ReLU + Dropout
         pool1 (nn.MaxPool2d): Spatial downsampling layer
+        gap (nn.AvgPool2d): Global Average Pooling layer
     
     Example:
         >>> model = Net()
@@ -81,70 +99,83 @@ class Net(nn.Module):
     """
     def __init__(self) -> None:
         """
-        Initialize the MNIST CNN architecture.
+        Initialize the MNIST CNN architecture with Dropout and Global Average Pooling.
         
-        Creates all convolutional blocks and pooling layers with optimized parameters
-        for MNIST digit classification. Uses bias=False for cleaner gradients and
-        consistent ReLU activations for non-linearity.
+        Creates all convolutional blocks, pooling layers, and regularization components
+        for improved generalization. Uses BatchNorm for stability, Dropout for
+        regularization, and GAP for parameter efficiency.
         """
         super(Net, self).__init__()
         
-        # Input Block: Initial feature extraction from grayscale to 32 feature maps
-        # Design: 3x3 kernel captures local patterns, no bias for cleaner gradients
+        # Input Block: Initial feature extraction with regularization
+        # Design: 3x3 kernel captures local patterns, BatchNorm stabilizes, Dropout regularizes
         self.convblock1 = nn.Sequential(
-            nn.Conv2d(in_channels=1, out_channels=32, kernel_size=(3, 3), padding=0, bias=False),
-            nn.ReLU()
-        )  # 28x28x1 → 26x26x32, RF=3
+            nn.Conv2d(in_channels=1, out_channels=8, kernel_size=(3, 3), padding=0, bias=False),
+            nn.ReLU(),
+            nn.BatchNorm2d(8),
+            nn.Dropout(dropout_value)
+        )  # 28x28x1 → 26x26x8, RF=3
 
-        # Conv Block 1: Progressive feature learning with increasing complexity
-        # Strategy: Double channels while reducing spatial dimensions
+        # Conv Block 1: Progressive feature learning with regularization
+        # Strategy: Increase channels with padding=1 to maintain spatial dimensions
         self.convblock2 = nn.Sequential(
-            nn.Conv2d(in_channels=32, out_channels=64, kernel_size=(3, 3), padding=0, bias=False),
-            nn.ReLU()
-        )  # 26x26x32 → 24x24x64, RF=5
-        self.convblock3 = nn.Sequential(
-            nn.Conv2d(in_channels=64, out_channels=128, kernel_size=(3, 3), padding=0, bias=False),
-            nn.ReLU()
-        )  # 24x24x64 → 22x22x128, RF=7
+            nn.Conv2d(in_channels=8, out_channels=16, kernel_size=(3, 3), padding=1, bias=False),
+            nn.ReLU(),
+            nn.BatchNorm2d(16),
+            nn.Dropout(dropout_value)
+        )  # 26x26x8 → 26x26x16, RF=5
 
-        # Transition Block: Spatial downsampling + computational efficiency
-        # Max pooling preserves important features while reducing computation
-        self.pool1 = nn.MaxPool2d(2, 2)  # 22x22x128 → 11x11x128, RF=8
+        # Transition Block: Channel reduction + spatial downsampling
+        # Max pooling reduces spatial dimensions by half
+        self.pool1 = nn.MaxPool2d(2, 2)  # 26x26x8 → 26x26x8, RF=6
         # 1x1 convolution reduces channels without spatial information loss
-        self.convblock4 = nn.Sequential(
-            nn.Conv2d(in_channels=128, out_channels=32, kernel_size=(1, 1), padding=0, bias=False),
-            nn.ReLU()
-        )  # 11x11x128 → 11x11x32, RF=8
+        self.convblock3 = nn.Sequential(
+            nn.Conv2d(in_channels=16, out_channels=8, kernel_size=(1, 1), padding=0, bias=False),
+        )  # 26x26x16 → 26x26x8, RF=6
 
-        # Conv Block 2: Deep feature extraction with increased complexity
+        # Conv Block 2: Deep feature extraction with regularization
         # Pattern: Rebuild channel depth for richer feature representation
+        self.convblock4 = nn.Sequential(
+            nn.Conv2d(in_channels=8, out_channels=16, kernel_size=(3, 3), padding=0, bias=False),
+            nn.ReLU(),            
+            nn.BatchNorm2d(16),
+            nn.Dropout(dropout_value)
+        )  # 13x13x8 → 11x11x16, RF=12
         self.convblock5 = nn.Sequential(
-            nn.Conv2d(in_channels=32, out_channels=64, kernel_size=(3, 3), padding=0, bias=False),
-            nn.ReLU()
-        )  # 11x11x32 → 9x9x64, RF=12
+            nn.Conv2d(in_channels=16, out_channels=16, kernel_size=(3, 3), padding=0, bias=False),
+            nn.ReLU(),            
+            nn.BatchNorm2d(16),
+            nn.Dropout(dropout_value)
+        )  # 11x11x16 → 9x9x16, RF=16
         self.convblock6 = nn.Sequential(
-            nn.Conv2d(in_channels=64, out_channels=128, kernel_size=(3, 3), padding=0, bias=False),
-            nn.ReLU()
-        )  # 9x9x64 → 7x7x128, RF=16
+            nn.Conv2d(in_channels=16, out_channels=32, kernel_size=(3, 3), padding=0, bias=False),
+            nn.ReLU(),            
+            nn.BatchNorm2d(32),
+            nn.Dropout(dropout_value)
+        )  # 9x9x16 → 7x7x32, RF=20
 
-        # Output Block: Classification preparation
-        # 1x1 convolution maps 128 features to 10 classes efficiently
+        # Output Block: Global Average Pooling + classification
+        # GAP reduces 7x7x32 to 1x1x32, eliminating need for FC layers
+        self.gap = nn.Sequential(
+            nn.AvgPool2d(kernel_size=7)
+        )  # 7x7x32 → 1x1x32, RF=28
+        
+        # Final 1x1 convolution maps 32 features to 10 classes
+        # No BatchNorm/ReLU/Dropout before final classification layer
         self.convblock7 = nn.Sequential(
-            nn.Conv2d(in_channels=128, out_channels=10, kernel_size=(1, 1), padding=0, bias=False),
-            nn.ReLU()
-        )  # 7x7x128 → 7x7x10, RF=16
-        # 7x7 convolution acts as global average pooling for final classification
-        # No ReLU before final layer to allow negative logits
-        self.convblock8 = nn.Sequential(
-            nn.Conv2d(in_channels=10, out_channels=10, kernel_size=(7, 7), padding=0, bias=False)
-        )  # 7x7x10 → 1x1x10, RF=28
+            nn.Conv2d(in_channels=32, out_channels=10, kernel_size=(1, 1), padding=0, bias=False),
+            # nn.BatchNorm2d(10),  # Commented out for final layer
+            # nn.ReLU(),           # Commented out for final layer
+            # nn.Dropout(dropout_value)  # Commented out for final layer
+        )  # 1x1x32 → 1x1x10, RF=28
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
-        Forward pass through the CNN architecture.
+        Forward pass through the CNN architecture with Dropout and Global Average Pooling.
         
-        Processes input images through all convolutional blocks, applying feature
-        extraction, spatial downsampling, and classification preparation.
+        Processes input images through all convolutional blocks with BatchNorm, Dropout,
+        and Global Average Pooling. The architecture uses regularization techniques
+        for improved generalization and parameter efficiency.
         
         Args:
             x (torch.Tensor): Input batch of grayscale images
@@ -159,16 +190,23 @@ class Net(nn.Module):
                 Range: (-∞, 0] (log probabilities)
         
         Forward Pass Flow:
-            1. Feature Extraction: Extract low-level features (edges, corners)
-            2. Progressive Learning: Build complex feature representations
+            1. Feature Extraction: Extract low-level features with BatchNorm + Dropout
+            2. Progressive Learning: Build complex feature representations with regularization
             3. Spatial Reduction: Reduce spatial dimensions while preserving features
             4. Channel Management: Balance computational efficiency and representation power
-            5. Classification: Map features to class probabilities
+            5. Global Average Pooling: Replace FC layers with spatial averaging
+            6. Classification: Map features to class probabilities
+        
+        Regularization Benefits:
+            - Dropout: Prevents overfitting by randomly zeroing 10% of activations
+            - Batch Normalization: Normalizes inputs to each layer, improving training stability
+            - Global Average Pooling: Reduces parameters and improves generalization
+            - No bias terms: BatchNorm includes learnable bias, making conv bias redundant
         
         Note:
             - Uses log_softmax for numerical stability in training
             - Final output can be converted to probabilities with torch.exp()
-            - No dropout or batch normalization for simplicity
+            - Dropout is active during training, disabled during inference
         
         Example:
             >>> model = Net()
@@ -177,27 +215,26 @@ class Net(nn.Module):
             >>> probs = torch.exp(log_probs)    # Convert to probabilities
             >>> predictions = torch.argmax(probs, dim=1)  # Get predicted classes
         """
-        # Stage 1: Initial feature extraction (low-level patterns)
-        x = self.convblock1(x)  # 28x28x1 → 26x26x32, RF=3
-        x = self.convblock2(x)  # 26x26x32 → 24x24x64, RF=5
-        x = self.convblock3(x)  # 24x24x64 → 22x22x128, RF=7
+        # Stage 1: Initial feature extraction with regularization (low-level patterns)
+        x = self.convblock1(x)  # 28x28x1 → 26x26x8, RF=3
+        x = self.convblock2(x)  # 26x26x8 → 26x26x16, RF=5
         
-        # Stage 2: Spatial reduction and computational efficiency
-        x = self.pool1(x)       # 22x22x128 → 11x11x128, RF=8 (max pooling)
-        x = self.convblock4(x)  # 11x11x128 → 11x11x32, RF=8 (channel reduction)
+        # Stage 2: Channel reduction and spatial downsampling
+        x = self.pool1(x)       # 26x26x16 → 13x13x16, RF=6 (max pooling)
+        x = self.convblock3(x)  # 26x26x16 → 26x26x8, RF=6 (channel reduction)
         
-        # Stage 3: Deep feature learning (high-level patterns)
-        x = self.convblock5(x)  # 11x11x32 → 9x9x64, RF=12
-        x = self.convblock6(x)  # 9x9x64 → 7x7x128, RF=16
+        # Stage 3: Deep feature learning with regularization (high-level patterns)
+        x = self.convblock4(x)  # 13x13x8 → 11x11x16, RF=12
+        x = self.convblock5(x)  # 11x11x16 → 9x9x16, RF=16
+        x = self.convblock6(x)  # 9x9x16 → 7x7x32, RF=20
         
-        # Stage 4: Classification preparation
-        x = self.convblock7(x)  # 7x7x128 → 7x7x10, RF=16 (feature-to-class mapping)
-        x = self.convblock8(x)  # 7x7x10 → 1x1x10, RF=28 (global pooling equivalent)
+        # Stage 4: Global Average Pooling + classification
+        x = self.gap(x)         # 7x7x32 → 1x1x32, RF=28 (global average pooling)
+        x = self.convblock7(x)  # 1x1x32 → 1x1x10, RF=28 (feature-to-class mapping)
         
         # Flatten and apply log-softmax for stable training
         x = x.view(-1, 10)  # Reshape to (batch_size, 10)
         return F.log_softmax(x, dim=-1)  # Apply log-softmax along class dimension
-
 
 def get_model_summary():
     """
